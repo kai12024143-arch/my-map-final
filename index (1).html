@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>常総防災マップ</title>
+    <style>
+        #map { height: 600px; width: 100%; border: 1px solid #ccc; }
+        body { font-family: sans-serif; margin: 20px; }
+        #post-form { margin-top: 20px; padding: 15px; background: #f0f0f0; border-radius: 8px; }
+        textarea { width: 100%; height: 60px; margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+
+    <h2>常総コミュニティ防災マップ</h2>
+    <div id="map"></div>
+
+    <form id="post-form">
+        <textarea id="post-text" placeholder="状況を入力してください..."></textarea>
+        <button type="submit" style="padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">投稿する</button>
+    </form>
+    
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
+
+    <script>
+        // Firebaseの設定
+        const firebaseConfig = {
+            apiKey: "AIzaSyBMOr6Kag-PCGL6piRVtjCDukk01aurb1M",
+            authDomain: "joso-13c95.firebaseapp.com",
+            projectId: "joso-13c95",
+            storageBucket: "joso-13c95.firebasestorage.app",
+            messagingSenderId: "659788884587",
+            appId: "1:659788884587:web:39b9a1b840039c24875f2e"
+        };
+        
+        // ★修正2: Firebaseの初期化チェック
+        if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+        }
+        const db = firebase.firestore();
+
+        let map;
+        let markers = [];
+
+        // 地図を出す命令
+        function initMap() {
+            map = new google.maps.Map(document.getElementById('map'), {
+                zoom: 14,
+                center: { lat: 35.9897, lng: 139.9791 }
+            });
+            loadPosts(); 
+        }
+
+        // 読み込み関数
+        function loadPosts() {
+            markers.forEach(m => m.setMap(null));
+            markers = [];
+
+            db.collection('posts').orderBy('timestamp', 'desc').limit(20).get().then((snapshot) => {
+                snapshot.forEach((doc) => {
+                    const data = doc.data();
+                    if(!data.lat || !data.lng) return;
+
+                    const marker = new google.maps.Marker({
+                        position: { lat: data.lat, lng: data.lng },
+                        map: map,
+                        title: data.text
+                    });
+
+                    const infoWindow = new google.maps.InfoWindow({
+                        content: `<div style="color:black; padding:5px;">${data.text}</div>`
+                    });
+
+                    marker.addListener('click', () => infoWindow.open(map, marker));
+                    markers.push(marker);
+                });
+            }).catch(err => console.error("読み込みエラー:", err));
+        }
+
+        // 投稿ボタン
+        document.getElementById('post-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const text = document.getElementById('post-text').value;
+            if (!text.trim()) return;
+
+            navigator.geolocation.getCurrentPosition((pos) => {
+                db.collection('posts').add({
+                    text: text,
+                    lat: pos.coords.latitude,
+                    lng: pos.coords.longitude,
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                }).then(() => {
+                    document.getElementById('post-text').value = '';
+                    alert("投稿しました！");
+                    loadPosts();
+                });
+            }, () => alert("位置情報を許可してください"));
+        });
+    </script>
+
+    <script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyB7hvh-OUCTVM62geqN543IMtgEWl-eeTQ&callback=initMap"></script>
+
+</body>
+</html>
